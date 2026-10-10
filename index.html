@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Search Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: manipulation;
+        }
+        .grid-cell {
+            user-select: none;
+            -webkit-user-select: none;
+            transition: all 0.15s ease-in-out;
+        }
+        /* Custom pill highlight for selected / found words */
+        .found-pill {
+            border: 2px solid #1f2937;
+            background-color: rgba(31, 41, 55, 0.08);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .selecting-pill {
+            background-color: rgba(59, 130, 246, 0.2);
+            border: 2px dashed #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col justify-between">
+
+    <header class="py-6 px-4 text-center bg-white shadow-sm">
+        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Word Search</h1>
+        <p class="text-sm text-slate-500 mt-1">Click & drag or tap first and last letters to find all hidden words!</p>
+    </header>
+
+    <main class="flex-1 max-w-xl w-full mx-auto p-4 flex flex-col items-center justify-center">
+        <!-- Game Board Container / Invitation Reveal Container -->
+        <div id="game-card" class="bg-white p-4 sm:p-6 rounded-2xl shadow-xl border border-slate-100 my-4 w-full max-w-[420px] transition-all duration-300">
+            <div id="word-grid" class="grid grid-cols-10 gap-1.5 sm:gap-2 aspect-square">
+                <!-- Grid cells injected via JavaScript -->
+            </div>
+            <!-- Invitation Image (Hidden by default, shown on win) -->
+            <div id="invitation-container" class="hidden flex flex-col items-center justify-center w-full aspect-square">
+                <img src="invitation.png" alt="Invitation" class="w-full h-full object-cover rounded-xl shadow-inner">
+            </div>
+        </div>
+
+        <!-- Word List Container -->
+        <div id="word-list-card" class="w-full bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100 mt-2">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 text-center">Words to Find</h2>
+            <div id="word-list" class="flex flex-wrap justify-center gap-3 sm:gap-4">
+                <!-- Word items injected via JavaScript -->
+            </div>
+        </div>
+
+        <!-- Play Again Button (Hidden by default, shown on win below the invitation) -->
+        <div id="win-controls" class="w-full mt-4 hidden">
+            <button onclick="resetGame()" class="w-full py-3.5 px-6 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-2xl shadow-xl transition-all text-lg">
+                Play Again
+            </button>
+        </div>
+    </main>
+
+    <footer class="py-4 text-center text-xs text-slate-400">
+    </footer>
+
+    <script>
+        // Exact 10x10 grid layout from the provided image
+        const rawGridData = [
+            ["F", "G", "Q", "C", "K", "W", "D", "A", "V", "I"],
+            ["C", "D", "T", "T", "N", "Y", "J", "O", "Z", "O"],
+            ["H", "I", "B", "X", "J", "Q", "H", "C", "I", "B"],
+            ["U", "K", "F", "O", "I", "M", "P", "U", "N", "R"],
+            ["Y", "N", "G", "U", "Y", "E", "N", "I", "E", "I"],
+            ["E", "E", "N", "O", "V", "E", "M", "B", "E", "R"],
+            ["N", "K", "L", "S", "I", "B", "Y", "M", "O", "F"],
+            ["P", "F", "I", "F", "T", "E", "E", "N", "T", "H"],
+            ["U", "M", "N", "D", "T", "U", "C", "G", "P", "D"],
+            ["A", "T", "Z", "T", "W", "E", "J", "G", "V", "W"]
+        ];
+
+        // Target words with their exact answers and display indices
+        const wordsConfig = [
+            { id: 1, text: "FIFTEENTH", found: false },
+            { id: 2, text: "NOVEMBER", found: false },
+            { id: 3, text: "CHUYEN", found: false },
+            { id: 4, text: "NGUYEN", found: false },
+            { id: 5, text: "HUE", found: false }
+        ];
+
+        let gridCells = [];
+        let isMouseDown = false;
+        let startCell = null;
+        let currentHoverCell = null;
+        let foundCellCoordinates = new Set(); // Stores string keys like "row,col"
+
+        // Initialize grid element references and render board
+        function initGame() {
+            const gridEl = document.getElementById('word-grid');
+            gridEl.innerHTML = '';
+            gridCells = [];
+            foundCellCoordinates.clear();
+
+            for (let r = 0; r < 10; r++) {
+                gridCells[r] = [];
+                for (let c = 0; c < 10; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center font-bold text-slate-700 text-base sm:text-lg cursor-pointer select-none';
+                    cell.textContent = rawGridData[r][c];
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+
+                    // Event Listeners for Mouse / Touch interaction
+                    cell.addEventListener('mousedown', (e) => handleDragStart(r, c, e));
+                    cell.addEventListener('mouseenter', () => handleDragEnter(r, c));
+                    cell.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        handleDragStart(r, c, e);
+                    }, { passive: false });
+                    cell.addEventListener('touchmove', (e) => {
+                        e.preventDefault();
+                        const touch = e.touches[0];
+                        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                        if (target && target.classList.contains('grid-cell')) {
+                            handleDragEnter(parseInt(target.dataset.row), parseInt(target.dataset.col));
+                        }
+                    }, { passive: false });
+
+                    gridEl.appendChild(cell);
+                    gridCells[r][c] = cell;
+                }
+            }
+
+            window.addEventListener('mouseup', handleDragEnd);
+            window.addEventListener('touchend', handleDragEnd);
+
+            renderWordList();
+            
+            // Reset view state (hide invitation, show grid and word list)
+            document.getElementById('word-grid').classList.remove('hidden');
+            document.getElementById('invitation-container').classList.add('hidden');
+            document.getElementById('word-list-card').classList.remove('hidden');
+            document.getElementById('win-controls').classList.add('hidden');
+        }
+
+        // Render word list at the bottom
+        function renderWordList() {
+            const listEl = document.getElementById('word-list');
+            listEl.innerHTML = '';
+            wordsConfig.forEach((w) => {
+                const item = document.createElement('span');
+                item.className = `text-sm sm:text-base font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                    w.found ? 'line-through text-slate-400 bg-slate-100' : 'text-slate-700 bg-slate-50 border border-slate-200'
+                }`;
+                item.textContent = `${w.id}. ${w.text}`;
+                listEl.appendChild(item);
+            });
+        }
+
+        // Start selection
+        function handleDragStart(r, c, e) {
+            isMouseDown = true;
+            startCell = { r, c };
+            currentHoverCell = { r, c };
+            updateSelectionPreview();
+        }
+
+        // Drag over cells
+        function handleDragEnter(r, c) {
+            if (!isMouseDown) return;
+            currentHoverCell = { r, c };
+            updateSelectionPreview();
+        }
+
+        // End selection and check word
+        function handleDragEnd() {
+            if (!isMouseDown) return;
+            isMouseDown = false;
+
+            if (startCell && currentHoverCell) {
+                const lineCells = getLineCoordinates(startCell.r, startCell.c, currentHoverCell.r, currentHoverCell.c);
+                if (lineCells) {
+                    const formedWord = lineCells.map(coord => rawGridData[coord.r][coord.c]).join('');
+                    const revWord = formedWord.split('').reverse().join('');
+
+                    let matchedWordObj = wordsConfig.find(w => !w.found && (w.text === formedWord || w.text === revWord));
+                    if (matchedWordObj) {
+                        matchedWordObj.found = true;
+                        lineCells.forEach(coord => {
+                            foundCellCoordinates.add(`${coord.r},${coord.c}`);
+                        });
+                        renderWordList();
+                        checkVictoryCondition();
+                    }
+                }
+            }
+
+            startCell = null;
+            currentHoverCell = null;
+            clearSelectionStyles();
+            applyPermanentStyles();
+        }
+
+        // Get coordinates along a straight line (horizontal, vertical, diagonal)
+        function getLineCoordinates(r1, c1, r2, c2) {
+            const dr = r2 - r1;
+            const dc = c2 - c1;
+            const lenR = Math.abs(dr);
+            const lenC = Math.abs(dc);
+
+            // Must be horizontal, vertical, or perfectly diagonal (45 deg)
+            if (lenR !== 0 && lenC !== 0 && lenR !== lenC) return null;
+
+            const steps = Math.max(lenR, lenC);
+            if (steps === 0) return [{ r: r1, c: c1 }];
+
+            const stepR = dr === 0 ? 0 : dr / lenR;
+            const stepC = dc === 0 ? 0 : dc / lenC;
+
+            const coords = [];
+            for (let i = 0; i <= steps; i++) {
+                coords.push({ r: r1 + (stepR * i), c: c1 + (stepC * i) });
+            }
+            return coords;
+        }
+
+        // Preview selection styling in real-time
+        function updateSelectionPreview() {
+            clearSelectionStyles();
+            applyPermanentStyles();
+
+            if (!startCell || !currentHoverCell) return;
+            const lineCells = getLineCoordinates(startCell.r, startCell.c, currentHoverCell.r, currentHoverCell.c);
+            if (lineCells) {
+                lineCells.forEach(coord => {
+                    const cell = gridCells[coord.r][coord.c];
+                    if (!cell.classList.contains('found-pill')) {
+                        cell.classList.add('selecting-pill');
+                    }
+                });
+            }
+        }
+
+        // Clear temporary selection classes
+        function clearSelectionStyles() {
+            for (let r = 0; r < 10; r++) {
+                for (let c = 0; c < 10; c++) {
+                    if (!foundCellCoordinates.has(`${r},${c}`)) {
+                        gridCells[r][c].classList.remove('selecting-pill');
+                    }
+                }
+            }
+        }
+
+        // Keep permanent styling on found cells
+        function applyPermanentStyles() {
+            foundCellCoordinates.forEach(key => {
+                const [r, c] = key.split(',').map(Number);
+                gridCells[r][c].classList.remove('selecting-pill', 'bg-slate-100', 'hover:bg-slate-200');
+                gridCells[r][c].classList.add('found-pill');
+            });
+        }
+
+        // Check if all words are discovered -> Reveal Invitation Image
+        function checkVictoryCondition() {
+            const allFound = wordsConfig.every(w => w.found);
+            if (allFound) {
+                // Swap grid out for invitation image
+                document.getElementById('word-grid').classList.add('hidden');
+                document.getElementById('invitation-container').classList.remove('hidden');
+                
+                // Hide word list card and show Play Again button below invitation
+                document.getElementById('word-list-card').classList.add('hidden');
+                document.getElementById('win-controls').classList.remove('hidden');
+            }
+        }
+
+        function resetGame() {
+            wordsConfig.forEach(w => w.found = false);
+            initGame();
+        }
+
+        // Run initialization on load
+        window.onload = initGame;
+    </script>
+</body>
+</html>
