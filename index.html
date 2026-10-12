@@ -18,15 +18,15 @@
         }
     </style>
 </head>
-<body style="background-color: #6b7d8e !important;" class="text-slate-100 min-h-screen flex items-center justify-center p-3 sm:p-6 font-sans select-none overflow-hidden">
+<body style="background-color: #6b7d8e !important;" class="text-slate-100 min-h-screen flex items-center justify-center p-3 font-sans select-none overflow-hidden">
 
-    <!-- Haupt-Container für die Einladung -->
-    <div id="scratch-container" class="relative w-full max-w-3xl h-[80vh] rounded-2xl overflow-hidden shadow-2xl border border-white/20 flex items-center justify-center">
+    <!-- Haupt-Container: Passt sich dynamisch exakt an das Bild an -->
+    <div id="scratch-container" class="relative rounded-2xl overflow-hidden shadow-2xl border border-white/20 flex items-center justify-center">
         
-        <!-- Das Bild unter der Rubbelschicht (Deine Einladung) -->
-        <img id="secret-image" src="invitation.png" alt="Einladung" class="absolute inset-0 w-full h-full object-contain pointer-events-none">
+        <!-- Das Bild unter der Rubbelschicht -->
+        <img id="secret-image" src="invitation.png" alt="Einladung" class="block max-w-[90vw] max-h-[90vh] w-auto h-auto object-contain pointer-events-none">
         
-        <!-- Die Rubbelschicht mit deinem Texturbild -->
+        <!-- Die Rubbelschicht deckt exakt das geladene Bild ab -->
         <canvas id="scratch-canvas" class="absolute inset-0 w-full h-full touch-none cursor-pointer z-10"></canvas>
     </div>
 
@@ -34,6 +34,7 @@
         const canvas = document.getElementById('scratch-canvas');
         const ctx = canvas.getContext('2d');
         const container = document.getElementById('scratch-container');
+        const secretImage = document.getElementById('secret-image');
 
         let isDrawing = false;
 
@@ -53,9 +54,8 @@
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
-            if (noiseNode) return; // Läuft bereits
+            if (noiseNode) return;
 
-            // Erstelle weißes Ruscheln (Scratch-Sound)
             const bufferSize = audioCtx.sampleRate * 2;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const output = buffer.getChannelData(0);
@@ -67,14 +67,13 @@
             noiseNode.buffer = buffer;
             noiseNode.loop = true;
 
-            // Filter für den typischen "kratzigen" Papier/Folieneffekt
             const filter = audioCtx.createBiquadFilter();
             filter.type = 'bandpass';
             filter.frequency.value = 1000;
             filter.Q.value = 3;
 
             gainNode = audioCtx.createGain();
-            gainNode.gain.value = 0.15; // Lautstärke anpassen (0.0 bis 1.0)
+            gainNode.gain.value = 0.15;
 
             noiseNode.connect(filter);
             filter.connect(gainNode);
@@ -94,13 +93,13 @@
         }
         // ----------------------------------------
 
-        // Lade das Texturbild als Rubbelschicht
         const coverImage = new Image();
-        coverImage.src = 'cover.png'; // Dein Texturbild für den Rubbeleffekt
+        coverImage.src = 'cover.png'; 
 
         function initCanvas() {
-            canvas.width = container.offsetWidth;
-            canvas.height = container.offsetHeight;
+            // Passt die Canvas-Größe exakt an die tatsächliche Darstellungsgröße des Bildes an
+            canvas.width = secretImage.clientWidth;
+            canvas.height = secretImage.clientHeight;
 
             if (coverImage.complete) {
                 ctx.drawImage(coverImage, 0, 0, canvas.width, canvas.height);
@@ -111,8 +110,14 @@
             }
         }
 
-        window.addEventListener('load', initCanvas);
+        // Sobald das Bild geladen ist, wird der Rahmen passgenau gesetzt
+        secretImage.addEventListener('load', initCanvas);
         window.addEventListener('resize', initCanvas);
+        
+        // Falls das Bild aus dem Cache schon geladen ist:
+        if (secretImage.complete) {
+            initCanvas();
+        }
 
         function getMousePos(e) {
             const rect = canvas.getBoundingClientRect();
@@ -134,7 +139,6 @@
             ctx.fill();
         }
 
-        // Event-Listener für Maus und Touch-Eingaben mit Sound-Steuerung
         canvas.addEventListener('mousedown', (e) => { 
             isDrawing = true; 
             startScratchSound();
