@@ -1,81 +1,65 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scratch to Reveal Invitation</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Force explicit background styling on html/body to prevent iframe color fallback */
         html, body {
-            background-color: #f3b4cd !important;
-            height: 100%;
-            width: 100%;
+            touch-action: none;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
             margin: 0;
             padding: 0;
-            overflow: hidden;
-            touch-action: none;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-
-        .card-shadow {
-            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 30px rgba(244, 63, 94, 0.2);
+            /* Hintergrundfarbe passend zur Textur */
+            background-color: #6b7d8e !important;
         }
     </style>
 </head>
-<body class="flex items-center justify-center p-3 sm:p-6 font-sans select-none">
+<body style="background-color: #6b7d8e !important;" class="text-slate-100 min-h-screen flex items-center justify-center p-3 sm:p-6 font-sans select-none overflow-hidden">
 
-    <main class="w-full max-w-3xl h-[90vh] max-h-[850px] flex items-center justify-center">
-        <div id="scratch-container" class="relative w-full h-full rounded-2xl overflow-hidden card-shadow border border-pink-900/40 bg-pink-950 flex items-center justify-center">
-            
-            <img id="invitation-image" 
-                 src="invitation.png" 
-                 alt="Invitation" 
-                 class="absolute inset-0 w-full h-full object-contain pointer-events-none select-none"
-                 onerror="this.onerror=null; this.src='https://placehold.co/800x1200/500724/fecdd3?text=invitation.png+Not+Found';" />
-
-            <canvas id="scratch-canvas" class="absolute inset-0 w-full h-full cursor-pointer touch-none z-10"></canvas>
-
-        </div>
-    </main>
+    <!-- Haupt-Container für die Einladung -->
+    <div id="scratch-container" class="relative w-full max-w-3xl h-[80vh] rounded-2xl overflow-hidden shadow-2xl border border-white/20 flex items-center justify-center">
+        
+        <!-- Das Bild unter der Rubbelschicht (Deine Einladung) -->
+        <img id="secret-image" src="invitation.png" alt="Einladung" class="absolute inset-0 w-full h-full object-contain pointer-events-none">
+        
+        <!-- Die Rubbelschicht mit deinem Texturbild -->
+        <canvas id="scratch-canvas" class="absolute inset-0 w-full h-full touch-none cursor-pointer z-10"></canvas>
+    </div>
 
     <script>
         const canvas = document.getElementById('scratch-canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const ctx = canvas.getContext('2d');
         const container = document.getElementById('scratch-container');
 
         let isDrawing = false;
-        let lastPoint = null;
 
-        function initScratchCanvas() {
-            const rect = container.getBoundingClientRect();
-            canvas.width = rect.width;
-            canvas.height = rect.height;
+        // Lade das Texturbild als Rubbelschicht
+        const coverImage = new Image();
+        coverImage.src = 'cover.png'; // Dein Texturbild für den Rubbeleffekt
 
-            // Render metallic scratch cover layer
-            ctx.globalCompositeOperation = 'source-over';
-            
-            const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-            grad.addColorStop(0, '#475569');
-            grad.addColorStop(0.5, '#94a3b8');
-            grad.addColorStop(1, '#334155');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function initCanvas() {
+            canvas.width = container.offsetWidth;
+            canvas.height = container.offsetHeight;
 
-            // Add metallic texture grain
-            for (let i = 0; i < 600; i++) {
-                ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.08})`;
-                ctx.fillRect(
-                    Math.random() * canvas.width,
-                    Math.random() * canvas.height,
-                    Math.random() * 100 + 20,
-                    Math.random() * 2 + 1
-                );
+            // Zeichne das Texturbild als Abdeckung über die Karte
+            if (coverImage.complete) {
+                ctx.drawImage(coverImage, 0, 0, canvas.width, canvas.height);
+            } else {
+                coverImage.onload = () => {
+                    ctx.drawImage(coverImage, 0, 0, canvas.width, canvas.height);
+                };
             }
         }
 
-        function getPos(e) {
+        window.addEventListener('load', initCanvas);
+        window.addEventListener('resize', initCanvas);
+
+        function getMousePos(e) {
             const rect = canvas.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -87,62 +71,22 @@
 
         function scratch(e) {
             if (!isDrawing) return;
-
-            const currentPoint = getPos(e);
-
+            const pos = getMousePos(e);
+            
             ctx.globalCompositeOperation = 'destination-out';
-            ctx.lineWidth = Math.min(canvas.width, canvas.height) * 0.12;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-
             ctx.beginPath();
-            if (lastPoint) {
-                ctx.moveTo(lastPoint.x, lastPoint.y);
-                ctx.lineTo(currentPoint.x, currentPoint.y);
-            } else {
-                ctx.arc(currentPoint.x, currentPoint.y, ctx.lineWidth / 2, 0, Math.PI * 2);
-            }
-            ctx.stroke();
-
-            lastPoint = currentPoint;
+            ctx.arc(pos.x, pos.y, 35, 0, Math.PI * 2, false);
+            ctx.fill();
         }
 
-        // Mouse Listeners
-        canvas.addEventListener('mousedown', (e) => {
-            isDrawing = true;
-            lastPoint = getPos(e);
-            scratch(e);
-        });
+        // Event-Listener für Maus und Touch-Eingaben
+        canvas.addEventListener('mousedown', (e) => { isDrawing = true; scratch(e); });
+        canvas.addEventListener('mousemove', scratch);
+        window.addEventListener('mouseup', () => { isDrawing = false; });
 
-        window.addEventListener('mousemove', (e) => {
-            if (isDrawing) scratch(e);
-        });
-
-        window.addEventListener('mouseup', () => {
-            isDrawing = false;
-            lastPoint = null;
-        });
-
-        // Touch Listeners
-        canvas.addEventListener('touchstart', (e) => {
-            isDrawing = true;
-            lastPoint = getPos(e);
-            scratch(e);
-            e.preventDefault();
-        }, { passive: false });
-
-        canvas.addEventListener('touchmove', (e) => {
-            if (isDrawing) scratch(e);
-            e.preventDefault();
-        }, { passive: false });
-
-        window.addEventListener('touchend', () => {
-            isDrawing = false;
-            lastPoint = null;
-        });
-
-        window.addEventListener('resize', initScratchCanvas);
-        window.onload = initScratchCanvas;
+        canvas.addEventListener('touchstart', (e) => { isDrawing = true; scratch(e); e.preventDefault(); }, { passive: false });
+        canvas.addEventListener('touchmove', (e) => { scratch(e); e.preventDefault(); }, { passive: false });
+        window.addEventListener('touchend', () => { isDrawing = false; });
     </script>
 </body>
 </html>
