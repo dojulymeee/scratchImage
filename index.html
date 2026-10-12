@@ -14,7 +14,6 @@
             width: 100vw;
             margin: 0;
             padding: 0;
-            /* Hintergrundfarbe passend zur Textur */
             background-color: #6b7d8e !important;
         }
     </style>
@@ -38,6 +37,63 @@
 
         let isDrawing = false;
 
+        // --- Web Audio API für den Rubbelsound ---
+        let audioCtx = null;
+        let noiseNode = null;
+        let gainNode = null;
+
+        function initAudio() {
+            if (audioCtx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+        }
+
+        function startScratchSound() {
+            initAudio();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            if (noiseNode) return; // Läuft bereits
+
+            // Erstelle weißes Ruscheln (Scratch-Sound)
+            const bufferSize = audioCtx.sampleRate * 2;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1;
+            }
+
+            noiseNode = audioCtx.createBufferSource();
+            noiseNode.buffer = buffer;
+            noiseNode.loop = true;
+
+            // Filter für den typischen "kratzigen" Papier/Folieneffekt
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = 1000;
+            filter.Q.value = 3;
+
+            gainNode = audioCtx.createGain();
+            gainNode.gain.value = 0.15; // Lautstärke anpassen (0.0 bis 1.0)
+
+            noiseNode.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            noiseNode.start();
+        }
+
+        function stopScratchSound() {
+            if (noiseNode) {
+                try {
+                    noiseNode.stop();
+                    noiseNode.disconnect();
+                } catch (e) {}
+                noiseNode = null;
+            }
+        }
+        // ----------------------------------------
+
         // Lade das Texturbild als Rubbelschicht
         const coverImage = new Image();
         coverImage.src = 'cover.png'; // Dein Texturbild für den Rubbeleffekt
@@ -46,7 +102,6 @@
             canvas.width = container.offsetWidth;
             canvas.height = container.offsetHeight;
 
-            // Zeichne das Texturbild als Abdeckung über die Karte
             if (coverImage.complete) {
                 ctx.drawImage(coverImage, 0, 0, canvas.width, canvas.height);
             } else {
@@ -79,14 +134,35 @@
             ctx.fill();
         }
 
-        // Event-Listener für Maus und Touch-Eingaben
-        canvas.addEventListener('mousedown', (e) => { isDrawing = true; scratch(e); });
+        // Event-Listener für Maus und Touch-Eingaben mit Sound-Steuerung
+        canvas.addEventListener('mousedown', (e) => { 
+            isDrawing = true; 
+            startScratchSound();
+            scratch(e); 
+        });
         canvas.addEventListener('mousemove', scratch);
-        window.addEventListener('mouseup', () => { isDrawing = false; });
+        
+        window.addEventListener('mouseup', () => { 
+            isDrawing = false; 
+            stopScratchSound();
+        });
 
-        canvas.addEventListener('touchstart', (e) => { isDrawing = true; scratch(e); e.preventDefault(); }, { passive: false });
-        canvas.addEventListener('touchmove', (e) => { scratch(e); e.preventDefault(); }, { passive: false });
-        window.addEventListener('touchend', () => { isDrawing = false; });
+        canvas.addEventListener('touchstart', (e) => { 
+            isDrawing = true; 
+            startScratchSound();
+            scratch(e); 
+            e.preventDefault(); 
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', (e) => { 
+            scratch(e); 
+            e.preventDefault(); 
+        }, { passive: false });
+        
+        window.addEventListener('touchend', () => { 
+            isDrawing = false; 
+            stopScratchSound();
+        });
     </script>
 </body>
 </html>
