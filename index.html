@@ -38,74 +38,45 @@
 
         let isDrawing = false;
 
-        // --- Web Audio API für den Rubbelsound ---
-        let audioCtx = null;
-        let noiseNode = null;
-        let gainNode = null;
-
-        function initAudio() {
-            if (audioCtx) return;
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
-        }
-
-        function startScratchSound() {
-            initAudio();
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-            if (noiseNode) return;
-
-            const bufferSize = audioCtx.sampleRate * 2;
-            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const output = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                output[i] = Math.random() * 2 - 1;
-            }
-
-            noiseNode = audioCtx.createBufferSource();
-            noiseNode.buffer = buffer;
-            noiseNode.loop = true;
-
-            const filter = audioCtx.createBiquadFilter();
-            filter.type = 'bandpass';
-            filter.frequency.value = 1000;
-            filter.Q.value = 3;
-
-            gainNode = audioCtx.createGain();
-            gainNode.gain.value = 0.15;
-
-            noiseNode.connect(filter);
-            filter.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-
-            noiseNode.start();
-        }
-
-        function stopScratchSound() {
-            if (noiseNode) {
-                try {
-                    noiseNode.stop();
-                    noiseNode.disconnect();
-                } catch (e) {}
-                noiseNode = null;
-            }
-        }
-        // ----------------------------------------
-
         const coverImage = new Image();
         coverImage.src = 'cover.png'; 
 
+        function drawOverlay() {
+            // Zeichnet das Texturbild als Untergrund
+            ctx.drawImage(coverImage, 0, 0, canvas.width, canvas.height);
+
+            // Text-Einstellungen für "Scratch it off" exakt in der Mitte
+            const fontSize = Math.max(20, Math.floor(canvas.width / 12));
+            ctx.font = `bold ${fontSize}px sans-serif`;
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle'; // Zentriert den Text vertikal genau auf der Y-Koordinate
+
+            // Schatten für bessere Lesbarkeit auf der Textur
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+            ctx.shadowBlur = 6;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+
+            // Zeichnet den Text in der absoluten Mitte
+            ctx.fillText('Scratch it off', canvas.width / 2, canvas.height / 2);
+
+            // Schatten zurücksetzen, damit das Freirubbeln fehlerfrei klappt
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+        }
+
         function initCanvas() {
-            // Passt die Canvas-Größe exakt an die tatsächliche Darstellungsgröße des Bildes an
             canvas.width = secretImage.clientWidth;
             canvas.height = secretImage.clientHeight;
 
             if (coverImage.complete) {
-                ctx.drawImage(coverImage, 0, 0, canvas.width, canvas.height);
+                drawOverlay();
             } else {
                 coverImage.onload = () => {
-                    ctx.drawImage(coverImage, 0, 0, canvas.width, canvas.height);
+                    drawOverlay();
                 };
             }
         }
@@ -141,19 +112,15 @@
 
         canvas.addEventListener('mousedown', (e) => { 
             isDrawing = true; 
-            //startScratchSound();
             scratch(e); 
         });
         canvas.addEventListener('mousemove', scratch);
-        
         window.addEventListener('mouseup', () => { 
             isDrawing = false; 
-            stopScratchSound();
         });
 
         canvas.addEventListener('touchstart', (e) => { 
             isDrawing = true; 
-            startScratchSound();
             scratch(e); 
             e.preventDefault(); 
         }, { passive: false });
@@ -165,7 +132,6 @@
         
         window.addEventListener('touchend', () => { 
             isDrawing = false; 
-            stopScratchSound();
         });
     </script>
 </body>
